@@ -249,7 +249,7 @@ client.identify({
   name: 'User A',
   location: 'London', 
   phone: '0800-POSTHOG', 
-  timezone: 'GMT+18' 
+  timezone: 'GMT+8' 
 }
 */
 ```
@@ -258,7 +258,7 @@ client.identify({
 
 Sometimes, you may want to assign multiple distinct IDs to a single user. This is helpful in scenarios where your primary distinct ID may be inaccessible. In this case, you can use `alias` to assign another distinct ID to the same user:
 
-In the below example, we assign the user with `distinct_id` another ID: `alias_id`. This means that any events submitted with `identify` using either `distinct_id` or `alias_id` will be associated with the same user.
+In the below example, we assign the user with `distinct_id` another ID: `alias_id`. This means that any events submitted using either `distinct_id` or `alias_id` will be associated with the same user.
 
 <MultiLanguage selector="tabs">
 
@@ -435,7 +435,7 @@ posthog.alias("distinct_id_one", "distinct_id_two");
 
 </MultiLanguage>
 
-## Merging users
+## Duplicate users in PostHog
 
 It may happen that, due to implementation issues, the same user in your product has multiple users in PostHog associated with them. This occurs when, for the same user, you call `identify` with different distinct IDs. For example, if you used "email" as a distinct ID but then user changed their email. In these cases, you can use `merge` to merge multiple PostHog users into a single user.
    
@@ -443,7 +443,7 @@ It may happen that, due to implementation issues, the same user in your product 
 > 
 > Due to the dangers, we don't recommend you merge users frequently, but rather as a one-off for recovering from implementation problems. We also encourage to consider whether merging users is strictly necessary for your data integrity, or a 'nice to have'.
 
-Merging users is done by uploading a `$merge_dangerously` capture event:
+Merging users is done by sending a `$merge_dangerously` event:
 
 <MultiLanguage selector="tabs">
 
@@ -474,7 +474,7 @@ client.Enqueue(posthog.Capture{
 
 ```ruby
 posthog.capture({
-    distinct_id: 'distinct id',
+    distinct_id: 'distinct_id_of_user_to_merge_into',
     event: '$merge_dangerously',
     properties: {
         alias: 'distinct_id_of_user_to_be_merged'
@@ -558,4 +558,4 @@ If we encounter an `identify` or `alias` event with one of the above problems, t
 
 - We process the event normally (it will be ingested and show up in the UI)
 - We refuse to merge users and an ingestion warning will be logged (see [ingestion warnings](/manual/data-management#ingestion-warnings) for more details).
-- The event will be only be tied to the user in the first passed `distinct_id`
+- The event will be only be tied to the user associated with `distinct_id`
