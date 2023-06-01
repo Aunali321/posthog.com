@@ -92,15 +92,13 @@ You should call identify as soon as you're able to. Typically, this is every tim
 
 You can call identify multiple times for a user throughout the same session, **as long as you continue to pass the same distinct_id**.
 
-## How Identify is implemented in PostHog
+## The difference between anonymous and identified users
 
 All events within PostHog are associated with a specific person, either an **anonymous user** (i.e., if `identify` has not been called) or an **identified user**.
 
 When a user starts browsing your website or app, they'll be automatically assigned an **anonymous ID**, which is then stored locally and allows us to track anonymous users – even across different sessions. This anonymous ID is created using the user's device ID, and typically looks like this: `17b845b08de74-033c497ed2753c-35667c03-1fa400-17b845b08dfd55`.
 
 By using `identify`, you are associating the anonymous ID with the distinct ID that you have provided. This enables us to associate any past or future events with your user.
-
-This is helpful in scenarios such as analyzing onboarding flows, as you're able to see which actions and events a specific user triggered before they signed up.
 
 ## Setting user properties
 
@@ -256,7 +254,7 @@ client.identify({
 
 ## Alias
 
-Sometimes, you may want to assign multiple distinct IDs to a single user. This is helpful in scenarios where your primary distinct ID may be inaccessible. In this case, you can use `alias` to assign another distinct ID to the same user:
+Sometimes, you may want to assign multiple distinct IDs to a single user. This is helpful in scenarios where your primary distinct ID may be inaccessible. For example, if a distinct ID which is typically used on the frontend is not available in certain parts of your backend code. In this case, you can use `alias` to assign another distinct ID to the same user:
 
 In the below example, we assign the user with `distinct_id` another ID: `alias_id`. This means that any events submitted using either `distinct_id` or `alias_id` will be associated with the same user.
 
@@ -312,136 +310,136 @@ There are two requirements when assigning an `alias_id`:
 <MultiLanguage selector="tabs">
 
 ```node
-// For User A
 client.identify({
     distinctId: 'distinct_id_one',
     properties: {},
-})
-// For User B
-client.identify({
-    distinctId: 'distinct_id_two',
-    properties: {},
-})
-
 // ❌ Not possible. 
-// You cannot use distinct_id_two as an alias for distinct_id_one
+// You cannot use distinct_id_one as an alias for any_other_id
 client.alias({
-    distinctId: 'distinct_id_one',
-    alias: 'distinct_id_two',
+    distinctId: 'any_other_id',
+    alias: 'distinct_id_one',
 })
 ```
 
 ```javascript
-// For User A
 posthog.identify('distinct_id_one');
-// For User B
-posthog.identify('distinct_id_two');
-
 // ❌ Not possible. 
-// You cannot use distinct_id_two as an alias for distinct_id_one
+// You cannot use distinct_id_one as an alias for any_other_id
 client.alias({
-    distinctId: 'distinct_id_one',
-    alias: 'distinct_id_two',
+    distinctId: 'any_other_id',
+    alias: 'distinct_id_one',
 })
 ```
 
 ```python
-# For User A
 posthog.identify('distinct_id_one',{})
-# For User B
-posthog.identify('distinct_id_two',{})
-
 # ❌ Not possible
-# You cannot use distinct_id_two as an alias for distinct_id_one
-posthog.alias('distinct_id_two', 'distinct_id_one');
+# You cannot use distinct_id_one as an alias for any_other_id
+posthog.alias('distinct_id_one', 'any_other_id');
 ```
 
 ```php
-# For User A
 PostHog::identify(array(
   'distinctId' => 'distinct_id_one',
   'properties' => array()
 ));
-# For User B
-PostHog::identify(array(
-  'distinctId' => 'distinct_id_two',
-  'properties' => array()
-));
-
 # ❌ Not possible
-# You cannot use distinct_id_two as an alias for distinct_id_one
+# You cannot use distinct_id_one as an alias for any_other_id
 PostHog::alias(array(
-  'distinctId' => 'distinct_id_one',
-  'alias' => 'distinct_id_two'
+  'distinctId' => 'any_other_id',
+  'alias' => 'distinct_id_one'
 ));
 ```
 
 ```ruby
-# For User A
 posthog.identify({
   distinct_id: "distinct_id_one",
   properties: {}
 })
-# For User B
-posthog.identify({
-  distinct_id: "distinct_id_two",
-  properties: {}
-})
-
 # ❌ Not possible
-# You cannot use distinct_id_two as an alias for distinct_id_one
+# You cannot use distinct_id_one as an alias for any_other_id
 posthog.alias({
-  distinct_id: "distinct_id_one",
-  alias: "distinct_id_two",
+  distinct_id: "any_other_id",
+  alias: "distinct_id_one",
 })
 ```
 
 ```go
-// For User A
 client.Enqueue(posthog.Identify{
   DistinctId: "distinct_id_one",
   Properties: posthog.NewProperties()
 })
-// For User B
-client.Enqueue(posthog.Identify{
-  DistinctId: "distinct_id_two",
-  Properties: posthog.NewProperties()
-})
-
 // ❌ Not possible
-// You cannot use distinct_id_two as an alias for distinct_id_one
+// You cannot use distinct_id_one as an alias for any_other_id
 client.Enqueue(posthog.Alias{
-  DistinctId: "distinct_id_one",
-  Alias: "distinct_id_two",
+  DistinctId: "any_other_id",
+  Alias: "distinct_id_one",
 })
 ```
 
 ```java
-// For User A
 posthog.identify(
   "distinct_id_one",
   new HashMap<String, Object>()
 );
-// For User B
-posthog.identify(
-  "distinct_id_two",
-  new HashMap<String, Object>()
-);
-
 // ❌ Not possible
-// You cannot use distinct_id_two as an alias for distinct_id_one
-posthog.alias("distinct_id_one", "distinct_id_two");
+// You cannot use distinct_id_one as an alias for any_other_id
+posthog.alias("any_other_id", "distinct_id_one");
 ```
 
 </MultiLanguage>
 
-## Duplicate users in PostHog
+## Considerations
 
-It may happen that, due to implementation issues, the same user in your product has multiple users in PostHog associated with them. This occurs when, for the same user, you call `identify` with different distinct IDs. For example, if you used "email" as a distinct ID but then user changed their email. In these cases, you can use `merge` to merge multiple PostHog users into a single user.
+Identifying users is a powerful feature, but it also has the potential to create problems if misused. 
+
+An important mistake to avoid is using non-unique distinct IDs to identify users. Two common ways in which this can happen are:
+
+- Your logic for generating IDs does not generate sufficiently strong IDs and you can end up with a clash where 2 users have the same ID.
+
+- There's a bug, typo, or mistake in your code leading to most or all users being identified with generic IDs like `null`, `true`, or `distinctId`.
+
+All of the above scenarios are highly problematic, as they will cause distinct users to be merged together in PostHog.
+
+While implementing analytics with PostHog, make sure you avoid above pitfalls to maintain data integrity. PostHog also has a few built-in protections stopping the most common threats to data integrity:
+
+- We do not allow identifying users with empty space strings of any length – e.g.,`' '`, `'       '`, etc.
+- We do not allow identifying users with the following strings (case insensitive):
+    - `anonymous`
+    - `guest`
+    - `distinctid`
+    - `distinct_id`
+    - `id`
+    - `not_authenticated`
+    - `email`
+    - `undefined`
+    - `true`
+    - `false`
+
+- We do not allow identifying users with the following strings (case sensitive):
+  - `[object Object]` 
+  - `NaN`
+  - `None`
+  - `none`
+  - `null`
+  - `0`
+  
+- An `alias_id` may not to be associated with more than one `distinct_id`.
+- An `alias_id` must be unique and not equal to any `distinct_id`.
+
+If we encounter an `identify` or `alias` event with one of the above problems, the following will happen:
+
+- We process the event normally (it will be ingested and show up in the UI)
+- We refuse to merge users and an ingestion warning will be logged (see [ingestion warnings](/manual/data-management#ingestion-warnings) for more details).
+- The event will be only be tied to the user associated with `distinct_id`
+
+### Duplicate users in PostHog
+
+It may happen that, due to implementation issues, the same user in your product has multiple users in PostHog associated with them. In these cases, you can use `$merge_dangerously` to merge multiple PostHog users into a single user.
    
-> **Warning:** Merging users with `merge` is irreversible and has no safeguards! Be careful not to merge users who should not be merged together.
+> **Warning:** Merging users with `merge_dangerously` is irreversible and has no safeguards! Be careful not to merge users who should not be merged together.
 > 
-> Due to the dangers, we don't recommend you merge users frequently, but rather as a one-off for recovering from implementation problems. We also encourage to consider whether merging users is strictly necessary for your data integrity, or a 'nice to have'.
+> Due to the dangers, we don't recommend you merge users frequently, but rather as a one-off for recovering from implementation problems. We also encourage you to consider whether merging users is strictly necessary for your data integrity, or a 'nice to have'.
 
 Merging users is done by sending a `$merge_dangerously` event:
 
@@ -484,7 +482,7 @@ posthog.capture({
 
 </MultiLanguage>
 
-### How are properties managed when merging users?
+#### How are properties managed when merging users?
 
 When a `User B` is merged into another `User A`, all the properties of the `User B` are added to `User A`. If there is a conflict, the properties of `User A` are prioritized over `User B`. For example:
 ```js
@@ -518,44 +516,3 @@ posthog.alias(
 }
 */
 ```
-
-## Considerations
-
-Identifying users is a powerful feature, but it also has the potential to create problems if misused. 
-
-An important mistake to avoid is using non-unique distinct IDs to identify users. Two common ways in which this can happen are:
-
-- Your logic for generating IDs does not generate sufficiently strong IDs and you can end up with a clash where 2 users have the same ID.
-
-- There's a bug, typo, or mistake in your code leading to most or all users being identified with generic IDs like `null`, `true`, or `distinctId`.
-
-All of the above scenarios are highly problematic, as they will cause distinct users to be merged together in PostHog.
-
-While implementing analytics with PostHog, make sure you avoid above pitfalls to maintain data integrity. PostHog also has a few built-in protections stopping the most common threats to data integrity:
-
-- We do not allow identifying users with empty space strings of any length – e.g.,`' '`, `'       '`, etc.
-- We do not allow identifying users with the following strings (case insensitive):
-    - `anonymous`
-    - `guest`
-    - `distinctid`
-    - `distinct_id`
-    - `id`
-    - `not_authenticated`
-    - `email`
-    - `undefined`
-    - `true`
-    - `false`
-
-- We do not allow identifying users with the following strings (case sensitive):
-  - `[object Object]` 
-  - `NaN`
-  - `None`
-  - `none`
-  - `null`
-  - `0`
-
-If we encounter an `identify` or `alias` event with one of the above problems, the following will happen:
-
-- We process the event normally (it will be ingested and show up in the UI)
-- We refuse to merge users and an ingestion warning will be logged (see [ingestion warnings](/manual/data-management#ingestion-warnings) for more details).
-- The event will be only be tied to the user associated with `distinct_id`
