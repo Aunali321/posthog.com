@@ -9,7 +9,7 @@ availability:
 
 ---
 
-Identify enables you to to track your users across different platforms, and connect events from before and after they log in for the first time.
+Identify enables you to to track your users across different devices, platforms (frontend and backend), and connect events from before and after they log in for the first time.
 
 Identifying users is done using the `identify` method, together with a unique ID.
 
@@ -108,7 +108,92 @@ Setting user properties enables you to use them in PostHog features such as [fil
 
 To set properties for a user, you can pass in a `properties` object in each `identify` call. Properties can be passed in either the `set` or `set_once` parameters.
 
+<MultiLanguage selector="tabs">
+
+```node
+client.identify({
+    distinctId: 'distinct_id',
+    properties: {
+      $set: {
+        name: 'Max Hedgehog',
+        email: 'max@hedgehogmail.com',
+      },
+      $set_once: {
+        name: 'Max Hedgehog',
+        email: 'max@hedgehogmail.com',
+      }
+    },
+})
+```
+
+```javascript
+posthog.identify(
+    'distinct_id',
+    { email: 'max@hedgehogmail.com', name: 'Max Hedgehog' } // set
+    { firstURL: '/blog' } // set_once
+);
+```
+
+```python
+posthog.identify(
+    'distinct_id',
+    {
+        'name': 'Max Hedgehog',
+        'email': 'max@hedgehogmail.com'
+    }
+)
+```
+
+```php
+PostHog::identify(array(
+  'distinctId' => 'distinct_id',
+  'properties' => array(
+    'name' => 'Max Hedgehog'
+    'email' => 'max@hedgehogmail.com',
+  )
+));
+```
+
+```ruby
+posthog.identify({
+  distinct_id: "distinct_id",
+  properties: {
+    name: "Max Hedgehog",
+    email: "max@hedgehogmail.com"
+  }
+})
+```
+
+```go
+client.Enqueue(posthog.Identify{
+  DistinctId: "distinct_id",
+  Properties: posthog.NewProperties().
+    Set("name", "Max Hedgehog").
+    Set("email", "max@hedgehogmail.com"),
+})
+```
+
+```java
+posthog.identify(
+  "distinct_id",
+  new HashMap<String, Object>() {
+    {
+      put("name", "Max Hedgehog");
+      put("email", "max@hedgehogmail.com");
+    }
+  }
+);
+```
+</MultiLanguage>
+
 > Whenever possible, we suggest passing in all user properties you have available each time you call identify, as this will ensure that their user profile on PostHog is up to date.
+
+It is also possible to set user properties without using `identify` and by using `posthog.people` instead. This is helpful when you'd like to set properties for anonymous users (users who have not yet called `identify`).
+
+```javascript
+posthog.people.set({ email: 'max@hedgehogmail.com' })
+posthog.people.set_once({ first_visited_URL: '/blog' })
+```
 
 ### What is the difference between `set` and `set_once`?
 
@@ -118,7 +203,7 @@ When using the `set` parameter, it will replace any value that may have been set
 
 For example:
 
-```js
+```javascript
 posthog.people.set({ plan: 'free_trail' })
 posthog.people.set({ plan: 'premium' })
 
@@ -130,11 +215,50 @@ posthog.people.set_once({ first_visited_URL: '/pricing' })
 // { first_visited_URL: '/blog' }
 ```
 
-## Merging users with multiple distinct IDs (Alias)
+### How are properties managed when identifying anonymous users?
 
-Sometimes, a single user may have multiple distinct IDs. For example, if on your backend you call `identify` using a distinct ID that is not available on your frontend. In this case, separate users will be created on the frontend and backend respectively. To merge these two users so that events will be associated with a single user (instead of two separate users), you can use `alias`:
+When an anonymous user is identified as `User A`, all the properties of the anonymous user are added to `User A`. If there is a conflict, the properties of `User A` are prioritized over the anonymous user. For example:
 
-In the below example, we merge the user with `alias_id` into the user with `distinct_id`. This means that the user with `distinct_id` is considered to be the original user, and `alias_id` is considered to be the alias. Any events submitted with `identify` using either `distinct_id` or `alias_id` will be associated with the same user.
+```js
+client.identify({
+    distinctId: 'user_A',
+    properties: {
+        name: 'User A',
+        location: 'London',
+        timezone: 'GMT',
+    },
+})
+
+client.reset()
+
+// as an anonymous user
+posthog.people.set({ 
+    name: 'Anonymous User',
+    phone: '0800-POSTHOG' 
+})
+
+client.identify({
+    distinctId: 'user_A',
+    properties: {
+        timezone: 'GMT+8',
+    },
+})
+
+/* User A will now have properties:
+{ 
+  name: 'User A',
+  location: 'London', 
+  phone: '0800-POSTHOG', 
+  timezone: 'GMT+18' 
+}
+*/
+```
+
+## Alias
+
+Sometimes, you may want to assign multiple distinct IDs to a single user. This is helpful in scenarios where your primary distinct ID may be inaccessible. In this case, you can use `alias` to assign another distinct ID to the same user:
+
+In the below example, we assign the user with `distinct_id` another ID: `alias_id`. This means that any events submitted with `identify` using either `distinct_id` or `alias_id` will be associated with the same user.
 
 <MultiLanguage selector="tabs">
 
@@ -180,132 +304,187 @@ posthog.alias("distinct_id", "alias_id");
 
 </MultiLanguage>
 
-Note that is not possible not be to merge the same `alias_id` to two different distinct IDs. For example:
+There are two requirements when assigning an `alias_id`:
+
+1. It cannot be associated with more than one `distinct_id`.
+2. The `alias_id` **must not** be equal to any other existing `distinct_id` i.e., it must be unique across all distinct IDs. For example:
 
 <MultiLanguage selector="tabs">
 
 ```node
+// For User A
+client.identify({
+    distinctId: 'distinct_id_one',
+    properties: {},
+})
+// For User B
+client.identify({
+    distinctId: 'distinct_id_two',
+    properties: {},
+})
+
+// ❌ Not possible. 
+// You cannot use distinct_id_two as an alias for distinct_id_one
 client.alias({
     distinctId: 'distinct_id_one',
-    alias: 'alias_id',
-})
-// ❌ Not possible
-client.alias({
-    distinctId: 'distinct_id_two',
-    alias: 'alias_id',
+    alias: 'distinct_id_two',
 })
 ```
 
 ```javascript
-posthog.alias('alias_id', 'distinct_id_one');
-// ❌ Not possible
-posthog.alias('alias_id', 'distinct_id_two');
+// For User A
+posthog.identify('distinct_id_one');
+// For User B
+posthog.identify('distinct_id_two');
 
+// ❌ Not possible. 
+// You cannot use distinct_id_two as an alias for distinct_id_one
+client.alias({
+    distinctId: 'distinct_id_one',
+    alias: 'distinct_id_two',
+})
 ```
 
 ```python
-posthog.alias('alias_id', 'distinct_id_one');
-# ❌ Not possible
-posthog.alias('alias_id', 'distinct_id_two');
+# For User A
+posthog.identify('distinct_id_one',{})
+# For User B
+posthog.identify('distinct_id_two',{})
 
+# ❌ Not possible
+# You cannot use distinct_id_two as an alias for distinct_id_one
+posthog.alias('distinct_id_two', 'distinct_id_one');
 ```
 
 ```php
+# For User A
+PostHog::identify(array(
+  'distinctId' => 'distinct_id_one',
+  'properties' => array()
+));
+# For User B
+PostHog::identify(array(
+  'distinctId' => 'distinct_id_two',
+  'properties' => array()
+));
+
+# ❌ Not possible
+# You cannot use distinct_id_two as an alias for distinct_id_one
 PostHog::alias(array(
   'distinctId' => 'distinct_id_one',
-  'alias' => 'alias_id'
-));
-// ❌ Not possible
-PostHog::alias(array(
-  'distinctId' => 'distinct_id_two',
-  'alias' => 'alias_id'
+  'alias' => 'distinct_id_two'
 ));
 ```
 
 ```ruby
+# For User A
+posthog.identify({
+  distinct_id: "distinct_id_one",
+  properties: {}
+})
+# For User B
+posthog.identify({
+  distinct_id: "distinct_id_two",
+  properties: {}
+})
+
+# ❌ Not possible
+# You cannot use distinct_id_two as an alias for distinct_id_one
 posthog.alias({
   distinct_id: "distinct_id_one",
-  alias: "alias_id",
-})
-# ❌ Not possible
-posthog.alias({
-  distinct_id: "distinct_id_two",
-  alias: "alias_id",
+  alias: "distinct_id_two",
 })
 ```
 
 ```go
+// For User A
+client.Enqueue(posthog.Identify{
+  DistinctId: "distinct_id_one",
+  Properties: posthog.NewProperties()
+})
+// For User B
+client.Enqueue(posthog.Identify{
+  DistinctId: "distinct_id_two",
+  Properties: posthog.NewProperties()
+})
+
+// ❌ Not possible
+// You cannot use distinct_id_two as an alias for distinct_id_one
 client.Enqueue(posthog.Alias{
   DistinctId: "distinct_id_one",
-  Alias: "alias_id",
-})
-// ❌ Not possible
-client.Enqueue(posthog.Alias{
-  DistinctId: "distinct_id_two",
-  Alias: "alias_id",
+  Alias: "distinct_id_two",
 })
 ```
 
 ```java
-posthog.alias("distinct_id_one", "alias_id");
+// For User A
+posthog.identify(
+  "distinct_id_one",
+  new HashMap<String, Object>()
+);
+// For User B
+posthog.identify(
+  "distinct_id_two",
+  new HashMap<String, Object>()
+);
+
 // ❌ Not possible
-posthog.alias("distinct_id_two", "alias_id");
+// You cannot use distinct_id_two as an alias for distinct_id_one
+posthog.alias("distinct_id_one", "distinct_id_two");
 ```
 
 </MultiLanguage>
 
-<!-- ### Merging dangerously (TBD)
+## Merging users
 
-1. `merge`, with no safeguards. We don't recommend using this in your code, but rather as a one-off manually for recovering from implementation problems. 
+It may happen that, due to implementation issues, the same user in your product has multiple users in PostHog associated with them. This occurs when, for the same user, you call `identify` with different distinct IDs. For example, if you used "email" as a distinct ID but then user changed their email. In these cases, you can use `merge` to merge multiple PostHog users into a single user.
    
-> **Warning:** Merging users with `merge` is irreversible! Be careful not to merge users who should not be merged together.
+> **Warning:** Merging users with `merge` is irreversible and has no safeguards! Be careful not to merge users who should not be merged together.
+> 
+> Due to the dangers, we don't recommend you merge users frequently, but rather as a one-off for recovering from implementation problems. We also encourage to consider whether merging users is strictly necessary for your data integrity, or a 'nice to have'.
 
-For example using the posthog python library:
+Merging users is done by uploading a `$merge_dangerously` capture event:
+
+<MultiLanguage selector="tabs">
+
+```node
+client.capture({
+    distinctId: 'distinct_id_of_user_to_merge_into',
+    event: '$merge_dangerously',
+    properties: {
+        alias: 'distinct_id_of_user_to_be_merged',
+    },
+})
+```
 
 ```py
-posthog.alias('user-id', 'non-identified-id')
-
-posthog.capture('user-id', '$merge_dangerously', {'alias': 'second-user-id'})
-
-``` -->
-### How are properties managed when merging or aliasing users?
-
-When an anonymous user (a user who has not yet called `identify`) is identified as `User A`, all the properties of the anonymous user are added to `User A`. If there is a conflict, the properties of `User A` are prioritized over the anonymous user. For example:
-
-```js
-client.identify({
-    distinctId: 'user_A',
-    properties: {
-        name: 'User A',
-        location: 'London',
-        timezone: 'GMT',
-    },
-})
-
-client.reset()
-
-// as an anonymous user
-posthog.people.set({ 
-    name: 'Anonymous User',
-    phone: '0800-POSTHOG' 
-})
-
-client.identify({
-    distinctId: 'user_A',
-    properties: {
-        timezone: 'GMT+8',
-    },
-})
-
-/* User A will now have properties:
-{ 
-  name: 'User A',
-  location: 'London', 
-  phone: '0800-POSTHOG', 
-  timezone: 'GMT+18' 
-}
-*/
+posthog.capture('distinct_id_of_user_to_merge_into', 
+  '$merge_dangerously', 
+  {'alias': 'distinct_id_of_user_to_be_merged'})
 ```
+
+```go
+client.Enqueue(posthog.Capture{
+  DistinctId: "distinct_id_of_user_to_merge_into",
+  Event:      "$merge_dangerously",
+  Properties: posthog.NewProperties().
+    Set("alias", "distinct_id_of_user_to_be_merged"),
+})
+```
+
+```ruby
+posthog.capture({
+    distinct_id: 'distinct id',
+    event: '$merge_dangerously',
+    properties: {
+        alias: 'distinct_id_of_user_to_be_merged'
+    }
+})
+```
+
+</MultiLanguage>
+
+### How are properties managed when merging users?
 
 When a `User B` is merged into another `User A`, all the properties of the `User B` are added to `User A`. If there is a conflict, the properties of `User A` are prioritized over `User B`. For example:
 ```js
