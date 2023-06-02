@@ -9,9 +9,9 @@ availability:
 
 ---
 
-Identify enables you to to track your users across different devices, platforms (frontend and backend), and connect events from before and after they log in for the first time.
+Identify enables you to to track the same user across different devices, platforms (frontend and backend), and connect events from before and after they log in for the first time.
 
-Identifying users is done using the `identify` method, together with a unique ID.
+Identifying users is done using the `identify` method, together with a unique ID. It is available in both our frontend and backend SDKs, as well as our [POST API](/docs/api/post-only-endpoints).
 
 <MultiLanguage selector="tabs">
 
@@ -84,173 +84,30 @@ posthog.identify(
 );
 ```
 
+```bash
+curl -v -L --header "Content-Type: application/json" -d '{
+    "api_key": "<ph_project_api_key>",
+    "timestamp": "2020-08-16 09:03:11.913767",
+    "context": {},
+    "distinct_id": "distinct_id",
+    "$set": {},
+    "event": "$identify"
+}' https://app.posthog.com/capture/
+```
+
 </MultiLanguage>
 
 > We don't recommend using emails as distinct IDs, as people changing their email will lead to extra complexity to maintaining data integrity. It is better to use database IDs or account IDs.
 
-You should call identify as soon as you're able to. Typically, this is every time your app loads for the first time, or directly after your users log in. This ensures that events sent during your users' sessions are correctly associated with them. 
+On your frontend, you should call identify as soon as you're able to. Typically, this is every time your app loads for the first time, or directly after your users log in. This ensures that events sent during your users' sessions are correctly associated with them. 
 
-You can call identify multiple times for a user throughout the same session, **as long as you continue to pass the same distinct_id**.
+### Setting user properties
 
-## The difference between anonymous and identified users
+You'll notice that one of the parameters in the `identify` method is a `properties` object. This enables you to set [user properties](/docs/getting-started/user-properties), which can be used in PostHog features such as [filters](/docs/product-analytics/trends#filtering-events-based-on-properties) or [cohorts](/docs/data/cohorts). 
 
-All events within PostHog are associated with a specific person, either an **anonymous user** (i.e., if `identify` has not been called) or an **identified user**.
+> Whenever possible, we recommend passing in all user properties you have available each time you call identify, as this will ensure that their user profile on PostHog is up to date.
 
-When a user starts browsing your website or app, they'll be automatically assigned an **anonymous ID**, which is then stored locally and allows us to track anonymous users – even across different sessions. This anonymous ID is created using the user's device ID, and typically looks like this: `17b845b08de74-033c497ed2753c-35667c03-1fa400-17b845b08dfd55`.
-
-By using `identify`, you are associating the anonymous ID with the distinct ID that you have provided. This enables us to associate any past or future events with your user.
-
-## Setting user properties
-
-Setting user properties enables you to use them in PostHog features such as [filters](/docs/product-analytics/trends#filtering-events-based-on-properties) or [cohorts](/docs/data/cohorts). 
-
-To set properties for a user, you can pass in a `properties` object in each `identify` call. Properties can be passed in either the `set` or `set_once` parameters.
-
-<MultiLanguage selector="tabs">
-
-```node
-client.identify({
-    distinctId: 'distinct_id',
-    properties: {
-      $set: {
-        name: 'Max Hedgehog',
-        email: 'max@hedgehogmail.com',
-      },
-      $set_once: {
-        name: 'Max Hedgehog',
-        email: 'max@hedgehogmail.com',
-      }
-    },
-})
-```
-
-```javascript
-posthog.identify(
-    'distinct_id',
-    { email: 'max@hedgehogmail.com', name: 'Max Hedgehog' } // set
-    { firstURL: '/blog' } // set_once
-);
-```
-
-```python
-posthog.identify(
-    'distinct_id',
-    {
-        'name': 'Max Hedgehog',
-        'email': 'max@hedgehogmail.com'
-    }
-)
-```
-
-```php
-PostHog::identify(array(
-  'distinctId' => 'distinct_id',
-  'properties' => array(
-    'name' => 'Max Hedgehog'
-    'email' => 'max@hedgehogmail.com',
-  )
-));
-```
-
-```ruby
-posthog.identify({
-  distinct_id: "distinct_id",
-  properties: {
-    name: "Max Hedgehog",
-    email: "max@hedgehogmail.com"
-  }
-})
-```
-
-```go
-client.Enqueue(posthog.Identify{
-  DistinctId: "distinct_id",
-  Properties: posthog.NewProperties().
-    Set("name", "Max Hedgehog").
-    Set("email", "max@hedgehogmail.com"),
-})
-```
-
-```java
-posthog.identify(
-  "distinct_id",
-  new HashMap<String, Object>() {
-    {
-      put("name", "Max Hedgehog");
-      put("email", "max@hedgehogmail.com");
-    }
-  }
-);
-```
-</MultiLanguage>
-
-> Whenever possible, we suggest passing in all user properties you have available each time you call identify, as this will ensure that their user profile on PostHog is up to date.
-
-It is also possible to set user properties without using `identify` and by using `posthog.people` instead. This is helpful when you'd like to set properties for anonymous users (users who have not yet called `identify`).
-
-```javascript
-posthog.people.set({ email: 'max@hedgehogmail.com' })
-posthog.people.set_once({ first_visited_URL: '/blog' })
-```
-
-### What is the difference between `set` and `set_once`?
-
-When using the `set` parameter, it will replace any value that may have been set on a person for a specific property. In contrast, `set_once` will only set the property if it has never been set before.
-
-`set` is typically used for properties that may change over time – e.g., email, current plan, organization name. `set_once` is typically only used for information that is guaranteed to never change – e.g., the first URL a user visited, or the date a user first logged in.
-
-For example:
-
-```javascript
-posthog.people.set({ plan: 'free_trail' })
-posthog.people.set({ plan: 'premium' })
-
-// { plan: 'premium' }
-
-posthog.people.set_once({ first_visited_URL: '/blog' })
-posthog.people.set_once({ first_visited_URL: '/pricing' })
-
-// { first_visited_URL: '/blog' }
-```
-
-### How are properties managed when identifying anonymous users?
-
-When an anonymous user is identified as `User A`, all the properties of the anonymous user are added to `User A`. If there is a conflict, the properties of `User A` are prioritized over the anonymous user. For example:
-
-```js
-client.identify({
-    distinctId: 'user_A',
-    properties: {
-        name: 'User A',
-        location: 'London',
-        timezone: 'GMT',
-    },
-})
-
-client.reset()
-
-// as an anonymous user
-posthog.people.set({ 
-    name: 'Anonymous User',
-    phone: '0800-POSTHOG' 
-})
-
-client.identify({
-    distinctId: 'user_A',
-    properties: {
-        timezone: 'GMT+8',
-    },
-})
-
-/* User A will now have properties:
-{ 
-  name: 'User A',
-  location: 'London', 
-  phone: '0800-POSTHOG', 
-  timezone: 'GMT+8' 
-}
-*/
-```
+User properties can also be set using a `capture` and not only with `identify`. See our [user properties docs](/docs/getting-started/user-properties) for more details on how to work with them and best practices.
 
 ## Alias
 
@@ -300,12 +157,24 @@ client.Enqueue(posthog.Alias{
 posthog.alias("distinct_id", "alias_id");
 ```
 
+```bash
+curl -v -L --header "Content-Type: application/json" -d '{
+    "api_key": "<ph_project_api_key>",
+    "properties": {
+        "distinct_id": "distinct_id_one",
+        "alias": "any_other_id"
+    },
+    "timestamp": "2020-08-16 09:03:11.913767",
+    "event": "$create_alias"
+}' https://app.posthog.com/capture/
+```
+
 </MultiLanguage>
 
 There are two requirements when assigning an `alias_id`:
 
 1. It cannot be associated with more than one `distinct_id`.
-2. The `alias_id` **must not** be equal to any other existing `distinct_id` i.e., it must be unique across all distinct IDs. For example:
+2. The `alias_id` **must not** be the `distinct_id` of any other user. For example:
 
 <MultiLanguage selector="tabs">
 
@@ -389,11 +258,78 @@ posthog.alias("any_other_id", "distinct_id_one");
 
 </MultiLanguage>
 
+## Using identify on the frontend
+
+In your frontend, all events within PostHog are associated with a specific person:
+1. Either an **anonymous user** – i.e., if `identify` has not been called.
+2. Or a **recognized user** – i.e., `identify` has been called..
+
+When a user starts browsing your website or app, they'll be automatically assigned an **anonymous ID**, which is then stored locally and allows us to track anonymous users – even across different sessions. This anonymous ID is created using the user's device ID.
+
+By using `identify`, you are associating the anonymous ID with the distinct ID that you have provided. This enables us to associate any past or future events with your user.
+
+> Note that depending on your [persistance configuration](/docs/libraries/js#persistence), the anonymous ID may not be stored, and thus regenerated across sessions.
+
+### How are properties managed when identifying anonymous users?
+
+When an anonymous user is identified as `User A`, all the properties of the anonymous user are added to `User A`. If there is a conflict, the properties of `User A` are prioritized over the anonymous user. For example:
+
+```js
+client.identify({
+    distinctId: 'user_A',
+    properties: {
+        name: 'User A',
+        location: 'London',
+        timezone: 'GMT',
+    },
+})
+
+client.reset()
+
+// as an anonymous user
+posthog.people.set({ 
+    name: 'Anonymous User',
+    phone: '0800-POSTHOG' 
+})
+
+client.identify({
+    distinctId: 'user_A',
+    properties: {
+        timezone: 'GMT+8',
+    },
+})
+
+/* User A will now have properties:
+{ 
+  name: 'User A',
+  location: 'London', 
+  phone: '0800-POSTHOG', 
+  timezone: 'GMT+8' 
+}
+*/
+```
+
+### Reset after logout
+
+If a user logs out on your frontend, you should call `reset` to unlink any future events made on that device with that user. 
+
+This is important if your users are sharing a computer, as otherwise all of those users will be grouped together into a single user due to shared cookies between sessions. **We strongly recommend you do this on logout even if you don't expect users to share a computer.**
+
+You can do that like so:
+
+```js
+posthog.reset()
+```
+
+If you _also_ want to reset the `device_id` so that the device will be considered a new device in future events, you can pass `true` as an argument:
+
+```js
+posthog.reset(true)
+```
+
 ## Considerations
 
-Identifying users is a powerful feature, but it also has the potential to create problems if misused. 
-
-An important mistake to avoid is using non-unique distinct IDs to identify users. Two common ways in which this can happen are:
+Avoid using non-unique distinct IDs to identify users. Two common ways in which this can happen are:
 
 - Your logic for generating IDs does not generate sufficiently strong IDs and you can end up with a clash where 2 users have the same ID.
 
@@ -478,6 +414,18 @@ posthog.capture({
         alias: 'distinct_id_of_user_to_be_merged'
     }
 })
+```
+
+```bash
+curl -v -L --header "Content-Type: application/json" -d '{
+    "api_key": "<ph_project_api_key>",
+    "properties": {
+      "alias": "distinct_id_of_user_to_be_merged"
+    },
+    "timestamp": "2020-08-16 09:03:11.913767",
+    "distinct_id": "distinct_id_of_user_to_merge_into",
+    "event": "$merge_dangerously"
+}' https://app.posthog.com/capture/
 ```
 
 </MultiLanguage>
