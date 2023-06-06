@@ -10,7 +10,7 @@ showTitle: true
 import UserPropertiesHowToSet from "./\_snippets/user-properties-how-to-set.mdx"
 import UserPropertiesSetVsSetOnce from "./\_snippets/user-properties-set-vs-set-once.mdx"
 
-User properties are a powerful feature in PostHog which enable you to better manage, analyze, and control data. You can create [filters](/docs/product-analytics/trends#filtering-events-based-on-properties) or [cohorts](/docs/data/cohorts) based on user properties, which can then be used to [create insights](/docs/product-analytics/insights), [feature flags](/docs/feature-flags), and more. 
+User properties enable you to capture, manage, and analyze specific data about a user. You can use them to create [filters](/docs/product-analytics/trends#filtering-events-based-on-properties) or [cohorts](/docs/data/cohorts), which can then be used in [insights](/docs/product-analytics/insights), [feature flags](/docs/feature-flags), and more. 
 
 ## How to set user properties
 
@@ -22,7 +22,7 @@ User properties are a powerful feature in PostHog which enable you to better man
 
 ### How to remove user properties
 
-Similarly to how you set properties, you can use `$unset` to remove properties by calling `capture` and including an array of properties keys:
+Similarly to how you set properties, you can use `$unset` to remove properties with any event and including an array of properties keys:
 
 <MultiLanguage selector="tabs">
 
@@ -51,7 +51,6 @@ posthog.capture(
     event='event_name',
     properties={
         '$unset': ['email'],
-        '$set_once': {'initial_url': '/blog'}
     }
 )
 ```
@@ -105,11 +104,13 @@ In the same way that every user can have properties associated with them, every 
 
 ## How to view user properties
 
-To view properties for a particular user, go to "[Persons & Groups](https://app.posthog.com/persons)" in the PostHog app. Then, click on any person in the list to view their properties. You can also add or delete properties using this interface.
+To view properties for a particular user, go to "[Persons & Groups](https://app.posthog.com/persons)" in the PostHog app. Then, click on any person in the list to view their properties. 
+
+On a user's property list, you can add properties to them by clicking the "New property" button, then adding a key, type, and value. You can also delete a custom property for a user by clicking the red garbage bin icon on the right side of property listing.
 
 ![How to view user properties](../../images/docs/data/user-properties/view-user-properties.mp4)
 
-## Person Display Name
+## Person display name
 
 The person display name is the name that is shown in the PostHog UI. The person properties that are used as the display name can be configured in [Project Settings](https://app.posthog.com/project/settings).
 
@@ -117,7 +118,7 @@ The person display name is the name that is shown in the PostHog UI. The person 
 
 ## Default user properties
 
-The following properties are automatically set for all users when using the `posthog-js` library:
+The following properties are automatically set for all users when using the `posthog-js` library or JavaScript snippet:
 
 | Property | Property Name | Description | Example |
 | :--- | :--- | :--- | :--- |
