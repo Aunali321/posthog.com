@@ -1,5 +1,5 @@
 ---
-title: Identify
+title: Identifying users
 sidebar: Docs
 showTitle: true
 availability:
@@ -8,22 +8,11 @@ availability:
     enterprise: full
 
 ---
+Linking events to specific users enables you to gain full insights as to how they're using your product across different sessions, devices, and platforms. 
 
-Identify enables you to to track the same user across different devices, platforms (frontend and backend), and connect events from before and after they log in for the first time.
-
-Identifying users is done using the `identify` method, together with a unique ID. It is available in both our frontend and backend SDKs, as well as our [POST API](/docs/api/post-only-endpoints).
+This is straight forward to do when [capturing backend events](/docs/getting-started/send-events#3-capture-backend-events), as you associate events to a specific user using `distinct_id`, which is a required argument. However, on the [frontend]((/docs/getting-started/send-events#sending-custom-properties-on-an-event)), this is not a required argument and thus events can be submitted anonymously. In order to link events from anonymous to specific users, you need to use `identify`:
 
 <MultiLanguage selector="tabs">
-
-```node
-client.identify({
-    distinctId: 'distinct_id',
-    properties: {
-        name: 'Max Hedgehog',
-        email: 'max@hedgehogmail.com',
-    },
-})
-```
 
 ```javascript
 posthog.identify(
@@ -33,85 +22,121 @@ posthog.identify(
 );
 ```
 
-```python
-posthog.identify(
-    'distinct_id',
-    {
-        'name': 'Max Hedgehog',
-        'email': 'max@hedgehogmail.com'
-    }
-)
+```Android
+PostHog.with(this)
+       .identify(distinctID, new Properties()
+                                .putValue("name", "My Name")
+                                .putValue("email", "user@posthog.com"));
 ```
 
-```php
-PostHog::identify(array(
-  'distinctId' => 'distinct_id',
-  'properties' => array(
-    'name' => 'Max Hedgehog'
-    'email' => 'max@hedgehogmail.com',
-  )
-));
-```
-
-```ruby
-posthog.identify({
-  distinct_id: "distinct_id",
-  properties: {
-    name: "Max Hedgehog",
-    email: "max@hedgehogmail.com"
-  }
-})
-```
-
-```go
-client.Enqueue(posthog.Identify{
-  DistinctId: "distinct_id",
-  Properties: posthog.NewProperties().
-    Set("name", "Max Hedgehog").
-    Set("email", "max@hedgehogmail.com"),
-})
-```
-
-```java
-posthog.identify(
-  "distinct_id",
-  new HashMap<String, Object>() {
-    {
-      put("name", "Max Hedgehog");
-      put("email", "max@hedgehogmail.com");
-    }
-  }
-);
-```
-
-```bash
-curl -v -L --header "Content-Type: application/json" -d '{
-    "api_key": "<ph_project_api_key>",
-    "timestamp": "2020-08-16 09:03:11.913767",
-    "context": {},
-    "distinct_id": "distinct_id",
-    "$set": {},
-    "event": "$identify"
-}' https://app.posthog.com/capture/
+```iOS
+posthog.identify("distinct_id", 
+          properties: ["name": "Max Hedgehog", "email": "max@hedgehogmail.com"])
 ```
 
 </MultiLanguage>
 
-> We don't recommend using emails as distinct IDs, as people changing their email will lead to extra complexity to maintaining data integrity. It is better to use database IDs or account IDs.
+## How `identify` works
 
-On your frontend, you should call identify as soon as you're able to. Typically, this is every time your app loads for the first time, or directly after your users log in. This ensures that events sent during your users' sessions are correctly associated with them. 
+When a user starts browsing your website or app, they'll be automatically assigned an **anonymous ID**, which is then stored locally. This allows us to track anonymous users – even across different sessions. This anonymous ID is created using the user's device ID.
 
-### Setting user properties
+> Note that depending on your [persistence configuration](/docs/libraries/js#persistence), the anonymous ID may not be stored, and thus regenerated across sessions.
 
-You'll notice that one of the parameters in the `identify` method is a `properties` object. This enables you to set [user properties](/docs/getting-started/user-properties), which can be used in PostHog features such as [filters](/docs/product-analytics/trends#filtering-events-based-on-properties) or [cohorts](/docs/data/cohorts). 
+By calling `identify` with a `distinct_id` of your choice (usually their ID in your database, or their email), you are linking the anonymous ID and distinct ID together. Thus all past and future events made with that anonymous ID are now associated with the distinct ID. This enables you to do things like associate events with a user from before they log in for the first time, or associate their events across different devices or platforms.
 
-> Whenever possible, we recommend passing in all user properties you have available each time you call identify, as this will ensure that their user profile on PostHog is up to date.
+> **A note on using `identify` in the backend:**
+>
+> Although it is technically possible to call `identify` using our backend SDKs, it is typically most useful in frontends. This is because there is no concept of anonymous sessions in the backend SDKs.
+
+## Best practices when using `identify`
+
+### 1. Call `identify` as soon as you're able to
+
+In your frontend, you should call identify as soon as you're able to. Typically, this is every time your app loads for the first time, or directly after your users log in. This ensures that events sent during your users' sessions are correctly associated with them. 
+
+You only need to call `identify` once per session.
+
+### 2. Use unique strings for Distinct IDs
+
+If two users have the same distinct ID, their data will be merged and they will be considered as one user in PostHog. Two common ways in which this can happen are:
+
+- Your logic for generating IDs does not generate sufficiently strong IDs and you can end up with a clash where 2 users have the same ID.
+- There's a bug, typo, or mistake in your code leading to most or all users being identified with generic IDs like `null`, `true`, or `distinctId`.
+
+PostHog also has a few built-in protections to stop the most common distinct ID mistakes:
+
+- We do not allow identifying users with empty space strings of any length – e.g.,`' '`, `'       '`, etc.
+- We do not allow identifying users with the following strings (case insensitive):
+    - `anonymous`
+    - `guest`
+    - `distinctid`
+    - `distinct_id`
+    - `id`
+    - `not_authenticated`
+    - `email`
+    - `undefined`
+    - `true`
+    - `false`
+
+- We do not allow identifying users with the following strings (case sensitive):
+  - `[object Object]` 
+  - `NaN`
+  - `None`
+  - `none`
+  - `null`
+  - `0`
+  
+### 3. Reset after logout
+
+If a user logs out on your frontend, you should call `reset` to unlink any future events made on that device with that user. 
+
+This is important if your users are sharing a computer, as otherwise all of those users will be grouped together into a single user due to shared cookies between sessions. **We strongly recommend you do this on logout even if you don't expect users to share a computer.**
+
+You can do that like so:
+
+<MultiLanguage selector="tabs">
+
+```javascript
+posthog.reset()
+```
+
+```iOS
+posthog.reset()
+```
+```Android
+PostHog.with(this)
+       .reset();
+```
+
+</MultiLanguage>
+
+If you _also_ want to reset the `device_id` so that the device will be considered a new device in future events, you can pass `true` as an argument:
+
+<MultiLanguage selector="tabs">
+
+```javascript
+posthog.reset()
+```
+
+```iOS
+posthog.reset(true)
+```
+
+```Android
+PostHog.with(this)
+       .reset(true);
+```
+</MultiLanguage>
+
+### 4. Setting user properties
+
+You'll notice that one of the parameters in the `identify` method is a `properties` object. This enables you to set [user properties](/docs/getting-started/user-properties). Whenever possible, we recommend passing in all user properties you have available each time you call identify, as this will ensure that their user profile on PostHog is up to date.
 
 User properties can also be set using a `capture` and not only with `identify`. See our [user properties docs](/docs/getting-started/user-properties) for more details on how to work with them and best practices.
 
-## Alias
+## Alias: Assigning multiple distinct IDs to the same user 
 
-Sometimes, you may want to assign multiple distinct IDs to a single user. This is helpful in scenarios where your primary distinct ID may be inaccessible. For example, if a distinct ID which is typically used on the frontend is not available in certain parts of your backend code. In this case, you can use `alias` to assign another distinct ID to the same user:
+Sometimes you may want to assign multiple distinct IDs to a single user. This is helpful in scenarios where your primary distinct ID may be inaccessible. For example, if a distinct ID which is typically used on the frontend is not available in certain parts of your backend code. In this case, you can use `alias` to assign another distinct ID to the same user:
 
 In the below example, we assign the user with `distinct_id` another ID: `alias_id`. This means that any events submitted using either `distinct_id` or `alias_id` will be associated with the same user.
 
@@ -161,8 +186,8 @@ posthog.alias("distinct_id", "alias_id");
 curl -v -L --header "Content-Type: application/json" -d '{
     "api_key": "<ph_project_api_key>",
     "properties": {
-        "distinct_id": "distinct_id_one",
-        "alias": "any_other_id"
+        "distinct_id": "distinct_id",
+        "alias": "alias_id"
     },
     "timestamp": "2020-08-16 09:03:11.913767",
     "event": "$create_alias"
@@ -179,96 +204,64 @@ There are two requirements when assigning an `alias_id`:
 <MultiLanguage selector="tabs">
 
 ```node
-client.identify({
-    distinctId: 'distinct_id_one',
-    properties: {},
 // ❌ Not possible. 
-// You cannot use distinct_id_one as an alias for any_other_id
 client.alias({
-    distinctId: 'any_other_id',
-    alias: 'distinct_id_one',
+    distinctId: 'distinct_id',
+    alias: 'distinct_id_of_another_user',
 })
 ```
 
 ```javascript
-posthog.identify('distinct_id_one');
 // ❌ Not possible. 
-// You cannot use distinct_id_one as an alias for any_other_id
 client.alias({
-    distinctId: 'any_other_id',
-    alias: 'distinct_id_one',
+    distinctId: 'distinct_id',
+    alias: 'distinct_id_of_another_user',
 })
 ```
 
 ```python
-posthog.identify('distinct_id_one',{})
 # ❌ Not possible
-# You cannot use distinct_id_one as an alias for any_other_id
-posthog.alias('distinct_id_one', 'any_other_id');
+posthog.alias('distinct_id_of_another_user', 'distinct_id');
 ```
 
 ```php
-PostHog::identify(array(
-  'distinctId' => 'distinct_id_one',
-  'properties' => array()
-));
 # ❌ Not possible
-# You cannot use distinct_id_one as an alias for any_other_id
 PostHog::alias(array(
-  'distinctId' => 'any_other_id',
-  'alias' => 'distinct_id_one'
+  'distinctId' => 'distinct_id',
+  'alias' => 'distinct_id_of_another_user'
 ));
 ```
 
 ```ruby
-posthog.identify({
-  distinct_id: "distinct_id_one",
-  properties: {}
-})
 # ❌ Not possible
-# You cannot use distinct_id_one as an alias for any_other_id
 posthog.alias({
-  distinct_id: "any_other_id",
-  alias: "distinct_id_one",
+  distinct_id: "distinct_id",
+  alias: "distinct_id_of_another_user",
 })
 ```
 
 ```go
-client.Enqueue(posthog.Identify{
-  DistinctId: "distinct_id_one",
-  Properties: posthog.NewProperties()
-})
 // ❌ Not possible
-// You cannot use distinct_id_one as an alias for any_other_id
 client.Enqueue(posthog.Alias{
-  DistinctId: "any_other_id",
-  Alias: "distinct_id_one",
+  DistinctId: "distinct_id",
+  Alias: "distinct_id_of_another_user",
 })
 ```
 
 ```java
-posthog.identify(
-  "distinct_id_one",
-  new HashMap<String, Object>()
-);
 // ❌ Not possible
-// You cannot use distinct_id_one as an alias for any_other_id
-posthog.alias("any_other_id", "distinct_id_one");
+posthog.alias("distinct_id", "distinct_id_of_another_user");
 ```
 
 </MultiLanguage>
 
-## Using identify on the frontend
+If we encounter an `identify` or `alias` event with one of the above problems, the following will happen:
 
-In your frontend, all events within PostHog are associated with a specific person:
-1. Either an **anonymous user** – i.e., if `identify` has not been called.
-2. Or a **recognized user** – i.e., `identify` has been called..
+1. We process the event normally (it will be ingested and show up in the UI)
+2. Merging users will be refused and an ingestion warning will be logged (see [ingestion warnings](/manual/data-management#ingestion-warnings) for more details).
+3. The event will be only be tied to the user associated with `distinct_id`
 
-When a user starts browsing your website or app, they'll be automatically assigned an **anonymous ID**, which is then stored locally and allows us to track anonymous users – even across different sessions. This anonymous ID is created using the user's device ID.
-
-By using `identify`, you are associating the anonymous ID with the distinct ID that you have provided. This enables us to associate any past or future events with your user.
-
-> Note that depending on your [persistence configuration](/docs/libraries/js#persistence), the anonymous ID may not be stored, and thus regenerated across sessions.
+## Troubleshooting and FAQs
 
 ### How are properties managed when identifying anonymous users?
 
@@ -309,67 +302,7 @@ client.identify({
 */
 ```
 
-### Reset after logout
-
-If a user logs out on your frontend, you should call `reset` to unlink any future events made on that device with that user. 
-
-This is important if your users are sharing a computer, as otherwise all of those users will be grouped together into a single user due to shared cookies between sessions. **We strongly recommend you do this on logout even if you don't expect users to share a computer.**
-
-You can do that like so:
-
-```js
-posthog.reset()
-```
-
-If you _also_ want to reset the `device_id` so that the device will be considered a new device in future events, you can pass `true` as an argument:
-
-```js
-posthog.reset(true)
-```
-
-## Considerations
-
-Avoid using non-unique distinct IDs to identify users. Two common ways in which this can happen are:
-
-- Your logic for generating IDs does not generate sufficiently strong IDs and you can end up with a clash where 2 users have the same ID.
-
-- There's a bug, typo, or mistake in your code leading to most or all users being identified with generic IDs like `null`, `true`, or `distinctId`.
-
-All of the above scenarios are highly problematic, as they will cause distinct users to be merged together in PostHog.
-
-While implementing analytics with PostHog, make sure you avoid above pitfalls to maintain data integrity. PostHog also has a few built-in protections stopping the most common threats to data integrity:
-
-- We do not allow identifying users with empty space strings of any length – e.g.,`' '`, `'       '`, etc.
-- We do not allow identifying users with the following strings (case insensitive):
-    - `anonymous`
-    - `guest`
-    - `distinctid`
-    - `distinct_id`
-    - `id`
-    - `not_authenticated`
-    - `email`
-    - `undefined`
-    - `true`
-    - `false`
-
-- We do not allow identifying users with the following strings (case sensitive):
-  - `[object Object]` 
-  - `NaN`
-  - `None`
-  - `none`
-  - `null`
-  - `0`
-  
-- An `alias_id` may not to be associated with more than one `distinct_id`.
-- An `alias_id` must be unique and not equal to any `distinct_id`.
-
-If we encounter an `identify` or `alias` event with one of the above problems, the following will happen:
-
-- We process the event normally (it will be ingested and show up in the UI)
-- We refuse to merge users and an ingestion warning will be logged (see [ingestion warnings](/manual/data-management#ingestion-warnings) for more details).
-- The event will be only be tied to the user associated with `distinct_id`
-
-### Duplicate users in PostHog
+### How to handle duplicates of the same user
 
 It may happen that, due to implementation issues, the same user in your product has multiple users in PostHog associated with them. In these cases, you can use `$merge_dangerously` to merge multiple PostHog users into a single user.
    
@@ -432,6 +365,7 @@ curl -v -L --header "Content-Type: application/json" -d '{
 
 #### How are properties managed when merging users?
 
+
 When a `User B` is merged into another `User A`, all the properties of the `User B` are added to `User A`. If there is a conflict, the properties of `User A` are prioritized over `User B`. For example:
 ```js
 client.identify({
@@ -464,3 +398,11 @@ posthog.alias(
 }
 */
 ```
+
+### How to split a merged user back into separate users
+
+If you've accidentally linked an incorrect anonymous ID with a specific distinct ID, or you've made a mistake when merging users, it's possible to split their combined user back into separate users. You can do this in the PostHog app by navigating to the user you'd like split, and then clicking "Split IDs" in the top right corner. 
+
+> **Warning:** This may change the numbers in your charts, even historically. We also cannot guarantee that historical data will be assigned to the correct user after the split. 
+
+![How to split users in PostHog](../../images/docs/data/actions/how-to-split-users.mp4)
